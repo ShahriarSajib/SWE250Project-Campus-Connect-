@@ -13,7 +13,6 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
   final currentUser = FirebaseAuth.instance.currentUser!;
   String searchText = '';
   List<String> selectedUserIds = [];
-  final TextEditingController _groupNameController = TextEditingController();
 
   Stream<QuerySnapshot> searchUsers(String text) {
     return FirebaseFirestore.instance
@@ -37,8 +36,8 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
     return friendDocs.docs;
   }
 
-  void createGroup() async {
-    final groupName = _groupNameController.text.trim();
+  // Updated createGroup to take groupName parameter
+  void createGroup(String groupName) async {
     if (groupName.isEmpty || selectedUserIds.length < 2) return;
 
     final groupDoc = FirebaseFirestore.instance.collection('conversations').doc();
@@ -49,12 +48,11 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
       'conversationProfile': '', // You can add group photo upload later
       'type': 'group',
       'participants': [currentUser.uid, ...selectedUserIds],
-      'createdBy': FirebaseAuth.instance.currentUser!.uid,
+      'createdBy': currentUser.uid,
       'lastMessage': '',
       'lastMessageTime': FieldValue.serverTimestamp(),
     });
 
-    // Navigate directly to ChatScreen after group creation
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -63,12 +61,10 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
     );
   }
 
-
   Future<void> startPrivateConversation() async {
     if (selectedUserIds.length != 1) return;
     final selectedUserId = selectedUserIds.first;
 
-    // Check if private conversation already exists
     final existingConversations = await FirebaseFirestore.instance
         .collection('conversations')
         .where('type', isEqualTo: 'private')
@@ -78,7 +74,6 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
     for (var doc in existingConversations.docs) {
       final participants = List<String>.from(doc['participants']);
       if (participants.contains(selectedUserId) && participants.length == 2) {
-        // Already exists
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -89,11 +84,9 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
       }
     }
 
-    // Fetch selected user's data
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(selectedUserId).get();
     final userData = userDoc.data() as Map<String, dynamic>;
 
-    // Create new conversation
     final conversationDoc = FirebaseFirestore.instance.collection('conversations').doc();
 
     await conversationDoc.set({
@@ -113,7 +106,6 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
       ),
     );
   }
-
 
   Widget buildUserList(List<DocumentSnapshot> users) {
     return ListView(
@@ -143,7 +135,8 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
     );
   }
 
-  Widget buildLoader() => Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator()));
+  Widget buildLoader() =>
+      Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator()));
 
   @override
   Widget build(BuildContext context) {
@@ -190,20 +183,30 @@ class _AddConversationScreenState extends State<AddConversationScreen> {
           else if (selectedUserIds.length >= 2)
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _groupNameController,
-                    decoration: InputDecoration(labelText: "Group Name"),
-                  ),
-                  SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: createGroup,
-                    child: Text("Create a group"),
-                  )
-                ],
+              child: Builder(
+                builder: (context) {
+                  final TextEditingController _groupNameController = TextEditingController();
+                  return Column(
+                    children: [
+                      TextField(
+                        controller: _groupNameController,
+                        decoration: InputDecoration(labelText: "Group Name"),
+                      ),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          final groupName = _groupNameController.text.trim();
+                          if (groupName.isNotEmpty) {
+                            createGroup(groupName);
+                          }
+                        },
+                        child: Text("Create a group"),
+                      ),
+                    ],
+                  );
+                },
               ),
-            )
+            ),
         ],
       ),
     );
